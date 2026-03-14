@@ -1,5 +1,4 @@
 import numpy as np
-from sklearn.utils import resample
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from deslib.dcs.mcb import MCB
@@ -7,7 +6,7 @@ from deslib.des.knora_u import KNORAU
 from deslib.des.knora_e import KNORAE
 from deslib.des.meta_des import METADES
 
-
+# Robustness metric based on the COR model
 def ratio_robustness(pred_log_prob, correct=False):
     sorted_pred_prob = np.sort(pred_log_prob, axis=1)
 
@@ -20,36 +19,37 @@ def ratio_robustness(pred_log_prob, correct=False):
         second_prob[second_prob==-np.inf] = np.log(0.001)
     
     # take elementwise minimum of the two measures
-    robust = np.exp((max_prob - second_prob)/2)
+    robust = max_prob - second_prob
     
     return robust
 
+# Uniform label corruption of Y
 def introduce_label_noise(y_train, classes, noise_fraction=0.05, random_state=42):
-    number_of_classes = len(classes)
+    number_of_classes = len(classes) # Number of classes of the response variable
     np.random.seed(random_state)
-    n_samples = len(y_train)
-    n_noisy = int(noise_fraction * n_samples)
-    noisy_indices = np.random.choice(n_samples, n_noisy, replace=False)
+    n_samples = len(y_train) # Sample size
+    n_noisy = int(noise_fraction * n_samples) # Number of observations to corrupt
+    noisy_indices = np.random.choice(n_samples, n_noisy, replace=False) # Randomly selecting which observations to corrupt
 
     y_train_noisy = y_train.copy()
     for index in noisy_indices:
-        current_label = y_train[index]
-        possible_labels = np.sort(classes)
-        possible_labels = possible_labels[possible_labels != current_label]
-        new_label = np.random.choice(possible_labels)
-        y_train_noisy[index] = new_label
+        current_label = y_train[index] # Getting the true class of Y
+        possible_labels = np.sort(classes) # Sorting the possible classes
+        possible_labels = possible_labels[possible_labels != current_label] # Removing the true class from the list
+        new_label = np.random.choice(possible_labels) # Choosing uniformly between the wrong classes
+        y_train_noisy[index] = new_label # Setting the new value
 
     return y_train_noisy
 
+# Accuracy of multiple dynamic selection strategies
 def acc_dyn_sel(B, X, y, ptrain, pval, all_mods, noise_frac = 0, k_max = 10, correct=False):
-    m=len(all_mods)
-    samp_scores = np.zeros([B,m+7])
+    m=len(all_mods) # Number of models
+    samp_scores = np.zeros([B,m+7]) # Matrix to record the objects (rows represent a specific train-val-test split, columns are the models and DS strategies)
 
+    # Each iteration returns the accuracy under a different train-val-test split
     for b in range(B):
-        Xn=X
-        yn=y
         # Data splitting
-        X_train, X2, y_train, y2 = train_test_split(Xn, yn, train_size=ptrain, random_state=b, stratify=yn)
+        X_train, X2, y_train, y2 = train_test_split(X, y, train_size=ptrain, random_state=b, stratify=y)
         X_val, X_test, y_val, y_test = train_test_split(X2, y2, train_size=pval/(1-ptrain), random_state=b, stratify=y2)
 
         # Adding noise to training and validation if required
@@ -65,9 +65,9 @@ def acc_dyn_sel(B, X, y, ptrain, pval, all_mods, noise_frac = 0, k_max = 10, cor
         #VALIDATION DATA
         n_val=len(y_val)
 
-        # DESlib models with selection of k
+        # DESlib Dynamic Selection strategies with selection of k (MCB, KNORA-U, KNORA-E and META-DES)
         acc_mix = np.zeros([k_max-1,4])
-        # Evaluating k on validation data
+        # Evaluating k on validation data (possible values of k range from 2 to k_max)
         for k in range(2,k_max+1):
             mix_mods = [
                         MCB(all_mods, k = k),
@@ -101,28 +101,25 @@ def acc_dyn_sel(B, X, y, ptrain, pval, all_mods, noise_frac = 0, k_max = 10, cor
         rob_ratio=rob2/rob1
         rob_order_ratio=rob_ratio.argsort()
 
-        # Case 1: best_acc (RS-D)
-        # Order the validation data and get the predictions
+        # Dynamic Selection strategies based on robustness
+        ##CASE 1: best_acc (RS-D)
+        ## Order the validation data and get the predictions
         X_ord=X_val[rob_order_ratio,:]
         y_ord=y_val[rob_order_ratio]
         M1_res=(mod_ord[0].predict(X_ord)==y_ord)*1
         M2_res=(mod_ord[1].predict(X_ord)==y_ord)*1
         M2_res=np.append(M2_res[1:],0) # First observation removed (never used), add 0 in the end
-        # Pick the pct/rob threshold such that overall accuracy is the highest
+        ## Pick the pct/rob threshold such that overall accuracy is the highest
         idx_M2=(M1_res.cumsum()+M2_res[::-1].cumsum()[::-1]).argmax()
         prop_b=(idx_M2+1)/n_val
         rob_b=rob_ratio[rob_order_ratio[idx_M2]]
         if rob_b==np.max(rob_ratio):
             rob_b=np.inf
-
-        # Case 2: highest ARC jump (RS-I)
-        # Order the validation data and get the predictions
-        X_ord=X_val[rob_order_ratio,:]
-        y_ord=y_val[rob_order_ratio]
-        M1_res=(mod_ord[0].predict(X_ord)==y_ord)*1
+        ##CASE 2: highest ARC jump (RS-I)
+        ## Order the validation data and get the predictions
         M2_res=(mod_ord[1].predict(X_ord)==y_ord)*1
         n_ord=len(M2_res)
-        # Checking where the ARC difference between M2 and M1 is the highest
+        ## Checking where the ARC difference between M2 and M1 is the highest
         M2_win=(M2_res[::-1].cumsum()[::-1] - M1_res[::-1].cumsum()[::-1])/np.ones(n_ord).cumsum()[::-1]
         if any(M2_win>0):
             idx_M2=M2_win.argmax()
@@ -133,25 +130,27 @@ def acc_dyn_sel(B, X, y, ptrain, pval, all_mods, noise_frac = 0, k_max = 10, cor
             rob_h=np.inf
         
         #TEST DATA
-        # Order the test data by M2 robustness and predict them with M2 only when over the rejection percentage (or robustness threshold)
+        # Order the test data by M2 robustness and predict them with M2 only when over the robustness threshold
         rob1_test=ratio_robustness(np.log(mod_ord[0].predict_proba(X_test)), correct)
         rob2_test=ratio_robustness(np.log(mod_ord[1].predict_proba(X_test)), correct)
         n_test=len(X_test)
 
-        cd_pct_b=(rob2_test/rob1_test).argsort()[np.linspace(1,n_test,num=n_test)/n_test>prop_b]
+        # Finding what model to use as classifier
         cd_rob_b=(rob2_test/rob1_test)>rob_b
-
-        cd_pct_h=(rob2_test/rob1_test).argsort()[np.linspace(1,n_test,num=n_test)/n_test>prop_h]
         cd_rob_h=(rob2_test/rob1_test)>rob_h
 
+        # Precitions for the best two models
         pred_M1=mod_ord[0].predict(X_test)
         pred_M2=mod_ord[1].predict(X_test)
 
+        # Recording the prediction under all strategies
         pred_te=np.zeros([n_test,m+7])
+
+        # Predictions of the base models
         for i in range(m):
             pred_te[:,i]=all_mods[i].predict(X_test)
         
-        # Predictions of chosen model
+        # Predictions of the model with highest acc in the validation set
         pred_te[:,m]=pred_M1
 
         # Predictions of DESlib models
@@ -166,7 +165,7 @@ def acc_dyn_sel(B, X, y, ptrain, pval, all_mods, noise_frac = 0, k_max = 10, cor
         pred_te[:,m+6]=pred_M1
         pred_te[cd_rob_h,m+6]=pred_M2[cd_rob_h]
 
-        # Compare on test data
+        # Accuracies on test data
         samp_scores[b,:]=[accuracy_score(y_test, pred_te[:,j]) for j in range(len(pred_te[0]))]
     
     return samp_scores

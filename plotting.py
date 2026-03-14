@@ -133,6 +133,7 @@ def accuracy_rejection_curve_single_AUC(measure, classification_results, ax=None
     return auc
 
 
+# Simple ARC curve
 def accuracy_rejection_curve(measure, classification_results, percentiles=None, ax=None, set_name=None, mean=False, stddev=False, key=None, color=None, AUC=False):
     """
     Plot the mean accuracy-rejection curve for all models.
@@ -224,6 +225,7 @@ def accuracy_rejection_curve(measure, classification_results, percentiles=None, 
         plt.show()
 
 
+## ARC curves for multiple robustness metrics applied to the same model
 def combine_plots_acc_rej(rob_measures, classification_results, set_name=None, fig_size=None, percentiles=None, mean=False, stddev=False, keys=None, show=True, title_extra="", folder=None, y_min=0.75, y_max=0.35, legend_loc='upper right', colors=Colors, AUC=False):
     if fig_size is None:
         fig_size = (8,2)
@@ -290,6 +292,7 @@ def combine_plots_acc_rej(rob_measures, classification_results, set_name=None, f
         plt.close()
 
 
+# ARC curves for different models
 def models_acc_rej(rob_measures, classification_results, set_name=None, fig_size=None, percentiles=None, mean=False, stddev=False, keys=None, show=True, title_extra="", folder=None, y_min=0.75, y_max=0.35, legend_loc='upper right', colors=Colors, AUC=False):
     print('')
     if fig_size is None:
