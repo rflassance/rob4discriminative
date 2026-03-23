@@ -1,7 +1,7 @@
 # rob4discriminative
 Robustness quantification for probabilistic discriminative classifiers
 
-This repository reproduces the analyses performed in the paper "Robustness Quantification for Discriminative Models: a New Robustness Metric and its Application to Dynamic Classifier Selection" submitted to the Conference on Uncertainty in Artificial Intelligence (UAI) 2026.
+This repository reproduces the analyses performed in the paper "Robustness Quantification for Discriminative Models: a New Robustness Metric and its Application to Dynamic Classifier Selection".
 
 For the experiments performed in section 3.1, the Generative Forests (gefs) package is required. It can be found on GitHub at [AlCorreia/GeFs](https://github.com/AlCorreia/GeFs). Using the package requires Python to be at most at version 3.7.
 
